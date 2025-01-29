@@ -1,0 +1,487 @@
+---
+title: "Datathon"
+author: "Avi Walia"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r echo=FALSE, message=FALSE}
+library(dplyr)
+library(ggplot2)
+library(corrplot)
+library(knitr)
+
+df <- read.csv("final_clean.csv")
+```
+
+```{r fig.height=4, message=FALSE, warning=FALSE}
+relevant_cols <- c("NY.ADJ.NNTY.PC.CD",
+                   "IC.IMP.CSBC.CD",
+                   "FP.CPI.TOTL",
+                   "IC.EXP.CSBC.CD",
+                   "FP.CPI.TOTL.ZG",
+                   "NE.CON.PRVT.ZS",
+                   "NE.CON.PRVT.CD",
+                   "LP.LPI.OVRL.XQ",
+                   "NY.GDP.PCAP.CD",
+                   "BM.GSR.TRAN.ZS",
+                   "NY.GDP.DEFL.KD.ZG",
+                   "IS.AIR.GOOD.MT.K1",
+                   "NE.TRD.GNFS.ZS",
+                   "EG.IMP.CONS.ZS"
+                   )
+
+df_selected <- df %>% select(all_of(relevant_cols)) %>% na.omit()
+
+# Compute correlation matrix
+cor_matrix <- cor(df_selected, use = "pairwise.complete.obs", method = "pearson")
+
+# Visualize correlation heatmap with numbers inside the boxes
+corrplot(cor_matrix, 
+         method = "color",       # Color-coded heatmap
+         type = "upper",         # Show only upper triangle
+         tl.col = "black",       # Text color
+         tl.srt = 45,            # Rotate text labels
+         addCoef.col = "black",  # Add correlation coefficients in black
+         number.cex = 0.8)       # Adjust font size of numbers
+```
+\newpage
+```{r warning=FALSE}
+# install.packages("Hmisc")
+library(Hmisc)
+library(knitr)
+library(kableExtra)
+library(dplyr)
+
+# Compute correlation matrix and p-values
+cor_results <- rcorr(as.matrix(df_selected), type = "pearson")
+
+# Extract correlation values and p-values
+cor_matrix <- cor_results$r
+p_matrix <- cor_results$P
+
+# Convert correlation and p-value matrices to long format
+cor_long <- as.data.frame(as.table(cor_matrix))
+p_long <- as.data.frame(as.table(p_matrix))
+
+# Merge correlations with their p-values
+cor_p_values <- merge(cor_long, p_long, by = c("Var1", "Var2"))
+colnames(cor_p_values) <- c("Variable 1", "Variable 2", "Correlation", "P-Value")
+
+# Ensure p-values are numeric and correctly formatted
+cor_p_values$`P-Value` <- ifelse(cor_p_values$`P-Value` < 0.05, "***", 
+                                 formatC(cor_p_values$`P-Value`, format = "f", digits = 4))
+
+# Round correlation values
+cor_p_values$Correlation <- formatC(cor_p_values$Correlation, format = "f", digits = 4)
+
+# Filter for strong correlations where |r| >= 0.5, excluding self-correlations
+cor_filtered <- cor_p_values %>%
+  filter(abs(as.numeric(Correlation)) >= 0.5 & `Variable 1` != `Variable 2`) %>%
+  arrange(desc(abs(as.numeric(Correlation))))
+
+# Pretty print using kable()
+kable(cor_filtered, format = "markdown")
+```
+
+
+```{r warning=FALSE, message=FALSE}
+df_avg <- df |> 
+  group_by(Region, Year) |> 
+  filter(!(Region %in% c("Sub-Saharan Africa", "Middle East & North Africa"))) |> 
+  summarise(avg_inflation = mean(FP.CPI.TOTL, na.rm = TRUE))
+
+ggplot(df_avg, aes(x = Year, y = avg_inflation, color = Region, group = Region)) +
+  geom_line(size = 1) +         # Line plot
+  geom_point(size = 2) +        # Add points for clarity
+  labs(title = "Consumer price index By Region (2009-2023)",
+       x = "Year",
+       y = "Consumer price index (2010 = 100)",
+       color = "Region") +      # Legend title
+  theme_minimal() +             # Minimalist theme
+  theme(legend.position = "bottom")
+```
+
+```{r warning=FALSE, message=FALSE}
+df_avg <- df |> 
+  group_by(Region, Year) |> 
+  # filter(!(Region %in% c("Sub-Saharan Africa", "Middle East & North Africa"))) |> 
+  summarise(avg_inflation = mean(FP.CPI.TOTL.ZG, na.rm = TRUE))
+
+ggplot(df_avg, aes(x = Year, y = avg_inflation, color = Region, group = Region)) +
+  geom_line(size = 1) +         # Line plot
+  geom_point(size = 2) +        # Add points for clarity
+  labs(title = "Inflation, consumer prices By Region (2009-2023)",
+       x = "Year",
+       y = "Inflation Rate (annual %)",
+       color = "Region") +      # Legend title
+  theme_minimal() +             # Minimalist theme
+  theme(legend.position = "bottom")
+```
+
+```{r warning=FALSE, message=FALSE}
+df_avg <- df |> 
+  group_by(Country.Name, Year) |> 
+  filter(Country.Name %in% c("Canada")) |> 
+  summarise(avg_inflation = mean(BM.GSR.GNFS.CD, na.rm = TRUE))
+
+ggplot(df_avg, aes(x = Year, y = avg_inflation, color = Country.Name, group = Country.Name)) +
+  geom_line(size = 1) +         # Line plot
+  geom_point(size = 2) +        # Add points for clarity
+  labs(title = "Imports of goods and services For Canada",
+       x = "Year",
+       y = "(BoP, current US$)",
+       color = "Country") +      # Legend title
+  theme_minimal() +             # Minimalist theme
+  theme(legend.position = "bottom")
+```
+
+```{r warning=FALSE, message=FALSE}
+df_avg <- df |> 
+  group_by(Country.Name, Year) |> 
+  filter(Country.Name %in% c("United States")) |> 
+  summarise(avg_inflation = mean(BM.GSR.GNFS.CD, na.rm = TRUE))
+
+ggplot(df_avg, aes(x = Year, y = avg_inflation, color = Country.Name, group = Country.Name)) +
+  geom_line(size = 1) +         # Line plot
+  geom_point(size = 2) +        # Add points for clarity
+  labs(title = "Imports of goods and services For the US",
+       x = "Year",
+       y = "(BoP, current US$)",
+       color = "Country") +      # Legend title
+  theme_minimal() +             # Minimalist theme
+  theme(legend.position = "bottom")
+```
+
+```{r warning=FALSE}
+df_avg <- df |> 
+  group_by(Region, Year) |> 
+  # filter(Region %in% c("North America")) |>
+  summarise(avg_inflation = mean(FM.LBL.BMNY.GD.ZS, na.rm = TRUE))
+
+ggplot(df_avg, aes(x = Year, y = avg_inflation, color = Region, group = Region)) +
+  geom_line(size = 1) +         # Line plot
+  geom_point(size = 2) +        # Add points for clarity
+  labs(title = "Broad money By Region",
+       x = "Year",
+       y = "Broad money (% of GDP)",
+       color = "Region") +      # Legend title
+  theme_minimal() +             # Minimalist theme
+  theme(legend.position = "bottom")
+```
+```{r warning=FALSE}
+df_avg <- df |> 
+  group_by(Region, Year) |> 
+  # filter(Country.Name %in% c("India")) |>
+  summarise(avg_inflation = mean(LP.LPI.OVRL.XQ, na.rm = TRUE))
+
+ggplot(df_avg, aes(x = Year, y = avg_inflation, color = Region, group = Region)) +
+  geom_line(size = 1) +         # Line plot
+  geom_point(size = 2) +        # Add points for clarity
+  labs(title = "Logistics performance index: Overall By Region",
+       x = "Year",
+       y = "LPI",
+       color = "Region") +      # Legend title
+  theme_minimal() +             # Minimalist theme
+  theme(legend.position = "bottom")
+```
+
+```{r warning=FALSE}
+df_avg <- df |> 
+  group_by(Region, Year) |> 
+  filter(!(Region %in% c("North America"))) |>
+  summarise(avg_inflation = mean(IS.AIR.GOOD.MT.K1, na.rm = TRUE))
+
+ggplot(df_avg, aes(x = Year, y = avg_inflation, color = Region, group = Region)) +
+  geom_line(size = 1) +         # Line plot
+  geom_point(size = 2) +        # Add points for clarity
+  labs(title = "Air transport, freight By Region",
+       x = "Year",
+       y = "Freight (million ton-km)",
+       color = "Region") +      # Legend title
+  theme_minimal() +             # Minimalist theme
+  theme(legend.position = "bottom")
+```
+
+```{r warning=FALSE}
+df_avg <- df |> 
+  group_by(Region, Year) |> 
+  filter(!(Region %in% c("North America", "Sub-Saharan Africa"))) |>
+  summarise(avg_inflation = mean(NY.GDP.MKTP.KD, na.rm = TRUE))
+
+ggplot(df_avg, aes(x = Year, y = avg_inflation, color = Region, group = Region)) +
+  geom_line(size = 1) +         # Line plot
+  geom_point(size = 2) +        # Add points for clarity
+  labs(title = "GDP (constant 2015 US$)",
+       x = "Year",
+       y = "US$",
+       color = "Region") +      # Legend title
+  theme_minimal() +             # Minimalist theme
+  theme(legend.position = "bottom", xpd=TRUE)
+```
+
+```{r warning=FALSE}
+df_avg <- df |> 
+  group_by(Region, Year) |> 
+  # filter(!(Region %in% c("North America"))) |>
+  summarise(avg_inflation = mean(SI.POV.GINI, na.rm = TRUE))
+
+ggplot(df_avg, aes(x = Year, y = avg_inflation, color = Region, group = Region)) +
+  geom_line(size = 1) +         # Line plot
+  geom_point(size = 2) +        # Add points for clarity
+  labs(title = "Cost to import, border compliance By Region",
+       x = "Year",
+       y = "(US$)",
+       color = "Region") +      # Legend title
+  theme_minimal() +             # Minimalist theme
+  theme(legend.position = "bottom")
+```
+
+```{r fig.width=4, message=FALSE, warning=FALSE}
+# install.packages("forecast", dependencies=TRUE)
+# install.packages("prophet", dependencies=TRUE)
+library(dplyr)
+library(tidyverse)
+library(forecast)
+library(prophet)
+library(ggplot2)
+library(knitr)
+
+df <- read.csv('final_clean.csv')
+
+df_selected <- df %>%
+  select(Year, FP.CPI.TOTL, Region) |> 
+  filter(!(Region %in% c("Sub-Saharan Africa", "Middle East & North Africa"))) |> 
+  filter(!is.na(FP.CPI.TOTL))
+
+# Convert Year to numeric
+df_selected <- df_selected %>%
+  mutate(Year = as.numeric(Year)) %>%
+  arrange(Year)
+
+df_avg_region <- df_selected %>%
+  group_by(Region, Year) %>%
+  summarise(Avg_Inflation = mean(FP.CPI.TOTL, na.rm = TRUE), .groups = "drop")
+
+# Define forecast period
+forecast_horizon <- 3  # Predict next 10 years
+
+# ---------------------------
+# GROUP-BY REGION & FORECAST USING ARIMA
+# ---------------------------
+forecast_results <- list()  # Store forecasted data for each region
+
+for (reg in unique(df_avg_region$Region)) {
+  
+  df_region <- df_avg_region %>% filter(Region == reg)
+  
+  # Convert to time series
+  ts_data <- ts(df_region$Avg_Inflation, start=min(df_region$Year), frequency=1)
+
+  # Run ARIMA
+  arima_model <- auto.arima(ts_data)
+  arima_forecast <- forecast(arima_model, h=forecast_horizon)
+  
+  # Prepare data for visualization
+  forecast_df <- data.frame(
+    Year = (max(df_region$Year) + 1):(max(df_region$Year) + forecast_horizon),
+    Inflation.Forecast = as.numeric(arima_forecast$mean),
+    Region = reg
+  )
+
+  forecast_results[[reg]] <- forecast_df
+}
+
+# Combine all regional forecasts
+forecast_combined <- bind_rows(forecast_results)
+
+# ---------------------------
+# PLOT ACTUAL & FORECASTED AVERAGE INFLATION BY REGION
+# ---------------------------
+ggplot() +
+  geom_line(data = df_avg_region, aes(x = Year, y = Avg_Inflation, color = Region), size=1) + 
+  geom_line(data = forecast_combined, aes(x = Year, y = Inflation.Forecast, color = Region), linetype="dashed", size=1) +
+  labs(title = "Average Consumer Price Index (CPI) by Region (ARIMA)", x = "Year", y = "Average CPI") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+df_selected <- df %>%
+  select(Year, BM.GSR.TRAN.ZS, Region) |> 
+  # filter(!(Region %in% c("Sub-Saharan Africa", "Middle East & North Africa"))) |>
+  filter(!is.na(BM.GSR.TRAN.ZS))
+
+# Convert Year to numeric
+df_selected <- df_selected %>%
+  mutate(Year = as.numeric(Year)) %>%
+  arrange(Year)
+
+df_avg_region <- df_selected %>%
+  group_by(Region, Year) %>%
+  summarise(Avg_Inflation = mean(BM.GSR.TRAN.ZS, na.rm = TRUE), .groups = "drop")
+
+# Define forecast period
+forecast_horizon <- 3  # Predict next 10 years
+
+# ---------------------------
+# GROUP-BY REGION & FORECAST USING ARIMA
+# ---------------------------
+forecast_results <- list()  # Store forecasted data for each region
+
+for (reg in unique(df_avg_region$Region)) {
+  
+  df_region <- df_avg_region %>% filter(Region == reg)
+  
+  # Convert to time series
+  ts_data <- ts(df_region$Avg_Inflation, start=min(df_region$Year), frequency=1)
+
+  # Run ARIMA
+  arima_model <- auto.arima(ts_data)
+  arima_forecast <- forecast(arima_model, h=forecast_horizon)
+  
+  # Prepare data for visualization
+  forecast_df <- data.frame(
+    Year = (max(df_region$Year) + 1):(max(df_region$Year) + forecast_horizon),
+    Inflation.Forecast = as.numeric(arima_forecast$mean),
+    Region = reg
+  )
+
+  forecast_results[[reg]] <- forecast_df
+}
+
+# Combine all regional forecasts
+forecast_combined <- bind_rows(forecast_results)
+
+# ---------------------------
+# PLOT ACTUAL & FORECASTED AVERAGE INFLATION BY REGION
+# ---------------------------
+ggplot() +
+  geom_line(data = df_avg_region, aes(x = Year, y = Avg_Inflation, color = Region), size=1) + 
+  geom_line(data = forecast_combined, aes(x = Year, y = Inflation.Forecast, color = Region), linetype="dashed", size=1) +
+  labs(title = "Transport services by Region (ARIMA)", x = "Year", y = "% of service imports, BoP") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+df_selected <- df %>%
+  select(Year, FR.INR.LEND, Region) |> 
+  filter(!(Region %in% c("Sub-Saharan Africa"))) |>
+  filter(!is.na(FR.INR.LEND))
+
+# Convert Year to numeric
+df_selected <- df_selected %>%
+  mutate(Year = as.numeric(Year)) %>%
+  arrange(Year)
+
+df_avg_region <- df_selected %>%
+  group_by(Region, Year) %>%
+  summarise(Avg_Inflation = mean(FR.INR.LEND, na.rm = TRUE), .groups = "drop")
+
+# Define forecast period
+forecast_horizon <- 3  # Predict next 10 years
+
+# ---------------------------
+# GROUP-BY REGION & FORECAST USING ARIMA
+# ---------------------------
+forecast_results <- list()  # Store forecasted data for each region
+
+for (reg in unique(df_avg_region$Region)) {
+  
+  df_region <- df_avg_region %>% filter(Region == reg)
+  
+  # Convert to time series
+  ts_data <- ts(df_region$Avg_Inflation, start=min(df_region$Year), frequency=1)
+
+  # Run ARIMA
+  arima_model <- auto.arima(ts_data)
+  arima_forecast <- forecast(arima_model, h=forecast_horizon)
+  
+  # Prepare data for visualization
+  forecast_df <- data.frame(
+    Year = (max(df_region$Year) + 1):(max(df_region$Year) + forecast_horizon),
+    Inflation.Forecast = as.numeric(arima_forecast$mean),
+    Region = reg
+  )
+
+  forecast_results[[reg]] <- forecast_df
+}
+
+# Combine all regional forecasts
+forecast_combined <- bind_rows(forecast_results)
+
+# ---------------------------
+# PLOT ACTUAL & FORECASTED AVERAGE INFLATION BY REGION
+# ---------------------------
+ggplot() +
+  geom_line(data = df_avg_region, aes(x = Year, y = Avg_Inflation, color = Region), size=1) + 
+  geom_line(data = forecast_combined, aes(x = Year, y = Inflation.Forecast, color = Region), linetype="dashed", size=1) +
+  labs(title = "Transport services by Region (ARIMA)", x = "Year", y = "% of service imports, BoP") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+df_selected <- df %>%
+  select(Year, NE.TRD.GNFS.ZS, Region) |> 
+  # filter(!(Region %in% c("Sub-Saharan Africa"))) |>
+  filter(!is.na(NE.TRD.GNFS.ZS))
+
+# Convert Year to numeric
+df_selected <- df_selected %>%
+  mutate(Year = as.numeric(Year)) %>%
+  arrange(Year)
+
+df_avg_region <- df_selected %>%
+  group_by(Region, Year) %>%
+  summarise(Avg_Inflation = mean(NE.TRD.GNFS.ZS, na.rm = TRUE), .groups = "drop")
+
+# Define forecast period
+forecast_horizon <- 3  # Predict next 10 years
+
+# ---------------------------
+# GROUP-BY REGION & FORECAST USING ARIMA
+# ---------------------------
+forecast_results <- list()  # Store forecasted data for each region
+
+for (reg in unique(df_avg_region$Region)) {
+  
+  df_region <- df_avg_region %>% filter(Region == reg)
+  
+  # Convert to time series
+  ts_data <- ts(df_region$Avg_Inflation, start=min(df_region$Year), frequency=1)
+
+  # Run ARIMA
+  arima_model <- auto.arima(ts_data)
+  arima_forecast <- forecast(arima_model, h=forecast_horizon)
+  
+  # Prepare data for visualization
+  forecast_df <- data.frame(
+    Year = (max(df_region$Year) + 1):(max(df_region$Year) + forecast_horizon),
+    Inflation.Forecast = as.numeric(arima_forecast$mean),
+    Region = reg
+  )
+
+  forecast_results[[reg]] <- forecast_df
+}
+
+# Combine all regional forecasts
+forecast_combined <- bind_rows(forecast_results)
+
+# ---------------------------
+# PLOT ACTUAL & FORECASTED AVERAGE INFLATION BY REGION
+# ---------------------------
+ggplot() +
+  geom_line(data = df_avg_region, aes(x = Year, y = Avg_Inflation, color = Region), size=1) + 
+  geom_line(data = forecast_combined, aes(x = Year, y = Inflation.Forecast, color = Region), linetype="dashed", size=1) +
+  labs(title = "Trade by Region (ARIMA)", x = "Year", y = "% of GDP) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
